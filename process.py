@@ -11,14 +11,14 @@ for file in files:
 		with open(file) as csvfile:
 			csvrows = csv.reader(csvfile, delimiter='\t')
 			next(csvrows)
-			for source, study in csvrows:
+			for id, source, study in csvrows:
 				pair[source].append(study)
 			continue
 			
 	with open(file) as csvfile:
 		csvrows = csv.reader(csvfile, delimiter='\t')
 		next(csvrows)
-		for source, study in csvrows:
+		for id, source, study in csvrows:
 			if source in pair:
 				pair[source].append(study)
 
