@@ -13,24 +13,24 @@ for file in files:
 	# edit header
 	header = file if header == "" else "%s %s %s" % (header, file, "\t") 
 
-	# open file
+	# open single file
 	with open(file) as csvfile:
 		csvrows = csv.reader(csvfile, delimiter='\t')
 		next(csvrows)
-		# for each row, expect the header
+		# for each row, expect the header, append it to the pairing file
 		for id, source, study in csvrows:
 			pair[source].append(study)
 	
 	csvfile.close()
 
-# only store identifiers that are paired
-pair = [pair[item] for item in pair if len(pair[item]) > 1]
+# keep pseudoidentifiers that have been paired more than once
+pair = {source: studyList for source, studyList in pair.items() if len(studyList) > 1}
 
-# compose the new file				
+# compose the pairing file, tab-seperated and without the source key				
 f = open("pair.csv","w+")
 f.write(header + "\n")
-for item in pair:
-	for i in item:
-		f.write(str(i) + "\t")
+for source in pair:
+	for study in pair[source]:
+		f.write(str(study) + "\t")
 	f.write("\n")
 f.close()
