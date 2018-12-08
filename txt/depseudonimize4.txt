@@ -1,0 +1,6 @@
+'STUDYDEF_ID'	'SOURCE_PSEUDO'	'PSEUDOIDEXT'
+4	a	-----
+4	2	--
+4	b	---
+4	c	----
+4	1	-
