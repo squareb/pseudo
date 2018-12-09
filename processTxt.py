@@ -8,7 +8,6 @@ import csv
 import glob
 from collections import defaultdict
 
-"""txt pairing example"""
 # determine files and define variables
 files = glob.glob('./txt/*.txt')
 pair = defaultdict(list)

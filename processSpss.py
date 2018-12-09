@@ -3,62 +3,107 @@ purpose:	repseudonimize spss files replacing the original identifier with a new 
 input:		.sav file, .txt depseudonimize file (for the original identifier), .txt depseudonimize file (for the new identifier)
 output:		.sav file
 """
+#TODO: error handling
 
-import csv
-import glob
-import re
+import os, sys, glob, time, csv, re
 from collections import defaultdict
 
+# doc: https://pythonhosted.org/savReaderWriter/generated_api_documentation.html
 import savReaderWriter
 
-"""spss pairing example"""
-# determine files and define variables
-savFileHeader = []
-savFileData = []
-savFileName = "./spss/Example.sav"
+"""
+progress bar
+"""
+progress = 0;
+def update_progress(job_title, progress):
+	size = 20
+	block = int(round(size*progress))
+	msg = "\r{0}: [{1}] {2}%".format(job_title, "#"*block + "-"*(size-block), round(progress*100, 2))
+	if progress >= 1: msg += " DONE\r\n"
+	sys.stdout.write(msg)
+	sys.stdout.flush()
 
-#TODO: make it so that we can process n spss files
-# read the spss file
-with savReaderWriter.SavReader(savFileName, returnHeader=True) as reader:
-	savFileHeader = next(reader)
-	for record in reader:
-		savFileData.append(record)
-reader.close()
+"""
+make a pairing key dictionary
+""" 
+#TODO: try to make more elegant without increasing the risk of human and/or sequencing errors
 
-#TODO: check on input of depseudonomization files, there need to be two (at the moment)
-# determine depseudonimization files and define variables
-files = glob.glob('./spss/*.txt')
-rePseudoData = defaultdict(list)
+# determine depseudonimization files
+pseudoOriginalFile = input("Please provide the full path, including file name, of the depseudonimize file with the original identifiers: ")
+pseudoNewFile = input("Please provide the full path, including file name, of the depseudonimize file with the new identifiers: ")
 
-# for each file
-for file in files:
-	# open single file
-	with open(file) as csvfile:
-		csvrows = csv.reader(csvfile, delimiter='\t')
-		next(csvrows)
-		# append each row to the pairing file
-		for id, source, study in csvrows:
-			rePseudoData[source].append(study)
-	
-	csvfile.close()
+# create a dictionary containing the source identifiers (key) with the original identifiers
+pseudoOriginalData = defaultdict(str)
+with open(pseudoOriginalFile) as csvfile:
+	csvrows = csv.reader(csvfile, delimiter='\t')
+	next(csvrows)
+	for id, source, study in csvrows:
+		pseudoOriginalData[source] = study
+csvfile.close()
 
-#TODO: there can only be two depseudonimization files (at the moment)
-# remodel the dictionary having the original id as the key and the new id as the value
+# create a dictionary pairing the original identifier (key) with the new identifier based on the common source identifier
 pairKey = {}
-for k, v in rePseudoData.items():
-	pairKey[v[0]] = v[1]
+with open(pseudoNewFile) as csvfile:
+	csvrows = csv.reader(csvfile, delimiter='\t')
+	next(csvrows)
+	for id, source, study in csvrows:
+		if(source in pseudoOriginalData.keys()):
+			pairKey[pseudoOriginalData[source]] = study
+csvfile.close()
 
-# for each record from the spss file
-for record in savFileData:
-	# strip the pseudoid so that we only have an integer (also decode it; this is a feature of savReaderWriter)
-	pseudoid = re.search(r'\d+',record[0].decode('utf-8')).group()
-	if pseudoid in pairKey.keys():
-		# replace record[0] if a match is found and encode it
-		record[0] = pairKey[pseudoid].encode() 
+# for validation purposes, return the first key/value pair of the dictionary (note: dictionaries do not guarantee order)
+print("Pairing file ready; peek: " + list(pairKey.keys())[0] + " <-> " + pairKey[list(pairKey.keys())[0]])
 
-# store the results in a new spss file
-savFileName = "./spss/Example_NEW.sav"
-varTypes = {b'ID': 20, b'Age': 0, b'Sex': 0, b'City': 20} #TODO: 1) why is 20 multiplied by 3 as a string type? 2) make this dynamic
-with savReaderWriter.SavWriter(savFileName, savFileHeader, varTypes) as writer:
-    for record in savFileData:
-        writer.writerow(record)
+""" 
+process spss files
+"""
+# determine spss files
+spssFilesPath = input("Please provide the location of the spss files: ")
+spssFiles = glob.glob(spssFilesPath + '\*.sav')
+
+# create a folder to store the new files
+dirName = "\generated"
+if not os.path.exists(spssFilesPath + dirName):
+	os.mkdir(spssFilesPath + dirName)
+	
+for file in spssFiles:
+	# update the progress bar
+	progress += 1
+	update_progress("Processsing spss files: ", progress/len(spssFiles))
+
+	savFileHeader, savFileData = [[],[]]
+	savFileName = file
+
+	# read the spss file
+	with savReaderWriter.SavReader(savFileName, returnHeader=True) as reader:
+		savFileHeader = next(reader)
+		for record in reader:
+			savFileData.append(record)
+	reader.close()
+
+	savVarTypes, savVarLabels, savValueLabels = ["", "", ""]
+	with savReaderWriter.SavHeaderReader(savFileName) as header:
+		metadata = header.dataDictionary()
+		savVarTypes = metadata['varTypes']
+		savVarFormats = metadata['formats']
+		savVarLabels = metadata['varLabels']
+		savValueLabels = metadata['valueLabels']
+	#header.close() #TODO: closing the SavHeaderReader gives errors
+
+	# for each record from the spss file
+	for record in savFileData:
+		# strip the pseudoid so that we only have an integer (also decode it; this is a feature of savReaderWriter)
+		pseudoid = re.search(r'\d+',record[0].decode('utf-8')).group()
+		if pseudoid in pairKey.keys():
+			# replace record[0] if a match is found and encode it
+			record[0] = pairKey[pseudoid].encode() 
+
+	# store the results in a new spss file
+	#TODO: check refSavFileName parameter for copying metadata
+	savFileName = "%s%s%s" % (spssFilesPath, '\generated\\', os.path.basename(savFileName))
+	with savReaderWriter.SavWriter(savFileName, savFileHeader, savVarTypes, 
+		valueLabels=savValueLabels, varLabels=savVarLabels, formats=savVarFormats) as writer:
+		for record in savFileData:
+			writer.writerow(record)
+	#writer.close() #TODO: SavWriter has no close()? See docs for more info
+
