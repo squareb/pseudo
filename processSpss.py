@@ -5,7 +5,7 @@ output:		.sav file
 """
 #TODO: error handling
 
-import os, sys, glob, time, csv, re
+import os, sys, glob, time, csv, re, contextlib
 from collections import defaultdict
 
 # doc: https://pythonhosted.org/savReaderWriter/generated_api_documentation.html
@@ -59,27 +59,27 @@ process spss files
 """
 # determine spss files
 spssFilesPath = input("Please provide the location of the spss files: ")
-spssFiles = glob.glob(spssFilesPath + '\*.sav')
+spssFiles = glob.glob(spssFilesPath + '/*.sav')
 
 # create a folder to store the new files
-dirName = "\generated"
+dirName = "/generated"
 if not os.path.exists(spssFilesPath + dirName):
 	os.mkdir(spssFilesPath + dirName)
-	
-for file in spssFiles:
-	# update the progress bar
-	progress += 1
-	update_progress("Processsing spss files: ", progress/len(spssFiles))
 
+# update the progress bar pre-liminary to display it. Next updates will be after a file is processed, until all files are done
+progress += 1
+update_progress("Processsing spss files: ", progress/(len(spssFiles) + 1))
+
+for file in spssFiles:
 	savFileHeader, savFileData = [[],[]]
 	savFileName = file
 
+	# suppress output to console, as SavReader contains an unfortunate print() statement
+	with contextlib.redirect_stdout(None):
 	# read the spss file
-	with savReaderWriter.SavReader(savFileName, returnHeader=True) as reader:
-		savFileHeader = next(reader)
-		for record in reader:
-			savFileData.append(record)
-	reader.close()
+		with savReaderWriter.SavReader(savFileName, returnHeader=True) as reader:
+			savFileData = reader.all()
+			savFileHeader = savFileData.pop(0)
 
 	savVarTypes, savVarLabels, savValueLabels = ["", "", ""]
 	with savReaderWriter.SavHeaderReader(savFileName) as header:
@@ -88,7 +88,6 @@ for file in spssFiles:
 		savVarFormats = metadata['formats']
 		savVarLabels = metadata['varLabels']
 		savValueLabels = metadata['valueLabels']
-	#header.close() #TODO: closing the SavHeaderReader gives errors
 
 	# for each record from the spss file
 	for record in savFileData:
@@ -100,10 +99,12 @@ for file in spssFiles:
 
 	# store the results in a new spss file
 	#TODO: check refSavFileName parameter for copying metadata
-	savFileName = "%s%s%s" % (spssFilesPath, '\generated\\', os.path.basename(savFileName))
+	savFileName = "%s%s%s" % (spssFilesPath, '/generated/p', os.path.basename(savFileName))
 	with savReaderWriter.SavWriter(savFileName, savFileHeader, savVarTypes, 
 		valueLabels=savValueLabels, varLabels=savVarLabels, formats=savVarFormats) as writer:
-		for record in savFileData:
-			writer.writerow(record)
-	#writer.close() #TODO: SavWriter has no close()? See docs for more info
+		writer.writerows(savFileData)
+
+	# update the progress bar
+	progress += 1
+	update_progress("Processsing spss files: ", progress/(len(spssFiles) + 1))
 
