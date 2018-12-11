@@ -4,6 +4,7 @@ input:		.sav file, .txt depseudonimize file (for the original identifier), .txt 
 output:		.sav file
 """
 #TODO: error handling
+#TODO: create a log file containing f.e. id's that were not paired ("warnings")
 
 import os, sys, glob, time, csv, re, contextlib
 from collections import defaultdict
@@ -61,6 +62,9 @@ process spss files
 spssFilesPath = input("Please provide the location of the spss files: ")
 spssFiles = glob.glob(spssFilesPath + '/*.sav')
 
+# determine the id-variable for pseudonimization
+spssFilesIdVariable = b"ID"
+
 # create a folder to store the new files
 dirName = "/generated"
 if not os.path.exists(spssFilesPath + dirName):
@@ -76,11 +80,12 @@ for file in spssFiles:
 
 	# suppress output to console, as SavReader contains an unfortunate print() statement
 	with contextlib.redirect_stdout(None):
-	# read the spss file
+		# read the spss file
 		with savReaderWriter.SavReader(savFileName, returnHeader=True) as reader:
 			savFileData = reader.all()
 			savFileHeader = savFileData.pop(0)
 
+	# retrieve meta-data 
 	savVarTypes, savVarLabels, savValueLabels = ["", "", ""]
 	with savReaderWriter.SavHeaderReader(savFileName) as header:
 		metadata = header.dataDictionary()
@@ -89,19 +94,19 @@ for file in spssFiles:
 		savVarLabels = metadata['varLabels']
 		savValueLabels = metadata['valueLabels']
 
-	#TODO: we're not always sure that record[0] is the id. Possible solution: ask the user for the varLabel that defines the id
 	# for each record from the spss file
+	indexid = savFileHeader.index(spssFilesIdVariable)
 	for record in savFileData:
 		# strip the pseudoid so that we only have an integer (also decode it; this is a feature of savReaderWriter)
-		pseudoid = re.search(r'\d+',record[0].decode('utf-8')).group()
+		pseudoid = re.search(r'\d+',record[indexid].decode('utf-8')).group()
 		if pseudoid in pairKey.keys():
-			# replace record[0] if a match is found and encode it
-			record[0] = pairKey[pseudoid].encode() 
+			# replace the id record if a match is found and encode it
+			record[indexid] = pairKey[pseudoid].encode() 
 
 	# store the results in a new spss file
 	#TODO: check refSavFileName parameter for copying metadata
-	savFileName = "%s%s%s" % (spssFilesPath, '/generated/p', os.path.basename(savFileName))
-	with savReaderWriter.SavWriter(savFileName, savFileHeader, savVarTypes, 
+	savFileNameNew = "%s%s%s" % (spssFilesPath, '/generated/', os.path.basename(savFileName))
+	with savReaderWriter.SavWriter(savFileNameNew, savFileHeader, savVarTypes, 
 		valueLabels=savValueLabels, varLabels=savVarLabels, formats=savVarFormats) as writer:
 		writer.writerows(savFileData)
 
