@@ -89,6 +89,7 @@ for file in spssFiles:
 		savVarLabels = metadata['varLabels']
 		savValueLabels = metadata['valueLabels']
 
+	#TODO: we're not always sure that record[0] is the id. Possible solution: ask the user for the varLabel that defines the id
 	# for each record from the spss file
 	for record in savFileData:
 		# strip the pseudoid so that we only have an integer (also decode it; this is a feature of savReaderWriter)
