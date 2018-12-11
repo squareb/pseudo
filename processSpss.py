@@ -27,8 +27,6 @@ def update_progress(job_title, progress):
 """
 make a pairing key dictionary
 """ 
-#TODO: try to make more elegant without increasing the risk of human and/or sequencing errors
-
 # determine depseudonimization files
 pseudoOriginalFile = input("Please provide the full path, including file name, of the depseudonimize file with the original identifiers: ")
 pseudoNewFile = input("Please provide the full path, including file name, of the depseudonimize file with the new identifiers: ")
@@ -63,7 +61,7 @@ spssFilesPath = input("Please provide the location of the spss files: ")
 spssFiles = glob.glob(spssFilesPath + '/*.sav')
 
 # determine the id-variable for pseudonimization
-spssFilesIdVariable = b"ID"
+spssFilesIdVariable = b"PSEUDOIDEXT"
 
 # create a folder to store the new files
 dirName = "/generated"
@@ -72,45 +70,46 @@ if not os.path.exists(spssFilesPath + dirName):
 
 # update the progress bar pre-liminary to display it. Next updates will be after a file is processed, until all files are done
 progress += 1
-update_progress("Processsing spss files: ", progress/(len(spssFiles) + 1))
+update_progress("Processing spss files", progress/(len(spssFiles) + 1))
 
 for file in spssFiles:
 	savFileHeader, savFileData = [[],[]]
 	savFileName = file
 
-	# suppress output to console, as SavReader contains an unfortunate print() statement
-	with contextlib.redirect_stdout(None):
-		# read the spss file
-		with savReaderWriter.SavReader(savFileName, returnHeader=True) as reader:
-			savFileData = reader.all()
-			savFileHeader = savFileData.pop(0)
+	# read the spss file
+	with savReaderWriter.SavReader(savFileName, returnHeader=True) as reader:
+		savFileData = reader.all()
+		savFileHeader = savFileData.pop(0)
 
 	# retrieve meta-data 
-	savVarTypes, savVarLabels, savValueLabels = ["", "", ""]
+	savVarTypes = {}
 	with savReaderWriter.SavHeaderReader(savFileName) as header:
 		metadata = header.dataDictionary()
 		savVarTypes = metadata['varTypes']
-		savVarFormats = metadata['formats']
-		savVarLabels = metadata['varLabels']
-		savValueLabels = metadata['valueLabels']
 
-	# for each record from the spss file
+	# get the index location of index variable based on the header (variable name)
 	indexid = savFileHeader.index(spssFilesIdVariable)
+	# for each record from the spss file
 	for record in savFileData:
 		# strip the pseudoid so that we only have an integer (also decode it; this is a feature of savReaderWriter)
 		pseudoid = re.search(r'\d+',record[indexid].decode('utf-8')).group()
 		if pseudoid in pairKey.keys():
 			# replace the id record if a match is found and encode it
 			record[indexid] = pairKey[pseudoid].encode() 
+		else:
+			record[indexid] = None
+			print("Warning: 'pseudoid: " + pseudoid + " could not be matched. Please verify file: " + savFileName + "'")
 
 	# store the results in a new spss file
 	#TODO: check refSavFileName parameter for copying metadata
 	savFileNameNew = "%s%s%s" % (spssFilesPath, '/generated/', os.path.basename(savFileName))
 	with savReaderWriter.SavWriter(savFileNameNew, savFileHeader, savVarTypes, 
-		valueLabels=savValueLabels, varLabels=savVarLabels, formats=savVarFormats) as writer:
+		valueLabels=metadata['valueLabels'], varLabels=metadata['varLabels'], 
+		formats=metadata['formats'], measureLevels=metadata['measureLevels'], 
+		columnWidths=metadata['columnWidths'], alignments=metadata['alignments']) as writer:
 		writer.writerows(savFileData)
 
 	# update the progress bar
 	progress += 1
-	update_progress("Processsing spss files: ", progress/(len(spssFiles) + 1))
+	update_progress("Processing spss files", progress/(len(spssFiles) + 1))
 
