@@ -6,11 +6,23 @@ output:		.sav file
 #TODO: error handling
 #TODO: create a log file containing f.e. id's that were not paired ("warnings")
 
-import os, sys, glob, time, csv, re, contextlib
+import os, sys, glob, datetime, csv, re, contextlib
 from collections import defaultdict
 
 # doc: https://pythonhosted.org/savReaderWriter/generated_api_documentation.html
 import savReaderWriter
+
+def sanitizeInput(string):
+	string = string.replace("\"", "")
+	return string
+
+def logger(string):
+	log = open("logfile_processSpss.txt", "a+")
+	log.write(string)
+	log.write("\n")
+	log.close()
+
+logger("\nRunning execution @ %s" % (datetime.datetime.now()))
 
 """
 progress bar
@@ -28,27 +40,36 @@ def update_progress(job_title, progress):
 make a pairing key dictionary
 """ 
 # determine depseudonimization files
-pseudoOriginalFile = input("Please provide the full path, including file name, of the depseudonimize file with the original identifiers: ")
-pseudoNewFile = input("Please provide the full path, including file name, of the depseudonimize file with the new identifiers: ")
+pseudoOriginalFile = sanitizeInput(input("Please provide the full path, including file name, of the depseudonimize file with the original identifiers: "))
+pseudoNewFile = sanitizeInput(input("Please provide the full path, including file name, of the depseudonimize file with the new identifiers: "))
 
 # create a dictionary containing the source identifiers (key) with the original identifiers
 pseudoOriginalData = defaultdict(str)
+pseudoOriginalCount = 0
 with open(pseudoOriginalFile) as csvfile:
 	csvrows = csv.reader(csvfile, delimiter='\t')
 	next(csvrows)
 	for id, source, study in csvrows:
 		pseudoOriginalData[source] = study
+		pseudoOriginalCount += 1
 csvfile.close()
 
 # create a dictionary pairing the original identifier (key) with the new identifier based on the common source identifier
 pairKey = {}
+pseudoNewCount = 0
 with open(pseudoNewFile) as csvfile:
 	csvrows = csv.reader(csvfile, delimiter='\t')
 	next(csvrows)
 	for id, source, study in csvrows:
 		if(source in pseudoOriginalData.keys()):
 			pairKey[pseudoOriginalData[source]] = study
+		pseudoNewCount += 1
 csvfile.close()
+
+logger("File containing original pseudoidentifiers: %s counting %s records" % (pseudoOriginalFile, pseudoOriginalCount))
+logger("File containing new pseudoidentifiers: %s counting %s records" % (pseudoNewFile, pseudoNewCount))
+if pseudoOriginalCount != pseudoNewCount:
+	logger("Warning: depseudonimize files do not contain an equal amount of identifiers!")
 
 # for validation purposes, return the first key/value pair of the dictionary (note: dictionaries do not guarantee order)
 print("Pairing file ready; peek: " + list(pairKey.keys())[0] + " <-> " + pairKey[list(pairKey.keys())[0]])
@@ -57,7 +78,8 @@ print("Pairing file ready; peek: " + list(pairKey.keys())[0] + " <-> " + pairKey
 process spss files
 """
 # determine spss files
-spssFilesPath = input("Please provide the location of the spss files: ")
+spssFilesPath = sanitizeInput(input("Please provide the location of the spss files: "))
+spssFilesPath = "./spss" if spssFilesPath == "" else spssFilesPath
 spssFiles = glob.glob(spssFilesPath + '/*.sav')
 
 # determine the id-variable for pseudonimization
@@ -89,6 +111,7 @@ for file in spssFiles:
 
 	# get the index location of index variable based on the header (variable name)
 	indexid = savFileHeader.index(spssFilesIdVariable)
+	unmatchedWarningFlag = False
 	# for each record from the spss file
 	for record in savFileData:
 		# strip the pseudoid so that we only have an integer (also decode it; this is a feature of savReaderWriter)
@@ -97,8 +120,11 @@ for file in spssFiles:
 			# replace the id record if a match is found and encode it
 			record[indexid] = pairKey[pseudoid].encode() 
 		else:
-			record[indexid] = None
-			print("Warning: 'pseudoid: " + pseudoid + " could not be matched. Please verify file: " + savFileName + "'")
+			unmatchedWarningFlag = True
+			record[indexid] = "".encode()
+	
+	if(unmatchedWarningFlag):
+		logger("Warning: one or several pseudoid's could not be matched in the following file: %s" % (savFileName))
 
 	# store the results in a new spss file
 	#TODO: check refSavFileName parameter for copying metadata
@@ -112,4 +138,3 @@ for file in spssFiles:
 	# update the progress bar
 	progress += 1
 	update_progress("Processing spss files", progress/(len(spssFiles) + 1))
-
