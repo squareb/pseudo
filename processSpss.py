@@ -3,8 +3,6 @@ purpose:	repseudonimize spss files replacing the original identifier with a new 
 input:		.sav file, .txt depseudonimize file (for the original identifier), .txt depseudonimize file (for the new identifier)
 output:		.sav file
 """
-#TODO: error handling
-#TODO: create a log file containing f.e. id's that were not paired ("warnings")
 
 import os, sys, glob, datetime, csv, re, contextlib
 from collections import defaultdict
@@ -12,10 +10,17 @@ from collections import defaultdict
 # doc: https://pythonhosted.org/savReaderWriter/generated_api_documentation.html
 import savReaderWriter
 
+"""
+method to do various input sanitizations on user input.
+"""
 def sanitizeInput(string):
+	# remove additional quotes
 	string = string.replace("\"", "")
 	return string
 
+"""
+simple logger to write messages to a .txt file for later reference (i.e. warnings, errors and timestamps)
+"""
 def logger(string):
 	log = open("logfile_processSpss.txt", "a+")
 	log.write(string)
@@ -45,6 +50,7 @@ pseudoNewFile = sanitizeInput(input("Please provide the full path, including fil
 
 # create a dictionary containing the source identifiers (key) with the original identifiers
 pseudoOriginalData = defaultdict(str)
+# keep count of the number of pseudo's so we can later log and compare if there is a difference in total number of id's between the files
 pseudoOriginalCount = 0
 with open(pseudoOriginalFile) as csvfile:
 	csvrows = csv.reader(csvfile, delimiter='\t')
@@ -66,6 +72,7 @@ with open(pseudoNewFile) as csvfile:
 		pseudoNewCount += 1
 csvfile.close()
 
+# log the total number of identifiers between the files and a possible warning if these are not equal
 logger("File containing original pseudoidentifiers: %s counting %s records" % (pseudoOriginalFile, pseudoOriginalCount))
 logger("File containing new pseudoidentifiers: %s counting %s records" % (pseudoNewFile, pseudoNewCount))
 if pseudoOriginalCount != pseudoNewCount:
@@ -82,7 +89,7 @@ spssFilesPath = sanitizeInput(input("Please provide the location of the spss fil
 spssFilesPath = "./spss" if spssFilesPath == "" else spssFilesPath
 spssFiles = glob.glob(spssFilesPath + '/*.sav')
 
-# determine the id-variable for pseudonimization
+# determine the id-variable from the spss file for pseudonimization
 spssFilesIdVariable = b"PSEUDOIDEXT"
 
 # create a folder to store the new files
@@ -111,18 +118,27 @@ for file in spssFiles:
 
 	# get the index location of index variable based on the header (variable name)
 	indexid = savFileHeader.index(spssFilesIdVariable)
+	# variables for keeping track of unmatched pseudoid's
+	unmatchedPseudoid = []
 	unmatchedWarningFlag = False
 	# for each record from the spss file
 	for record in savFileData:
 		# strip the pseudoid so that we only have an integer (also decode it; this is a feature of savReaderWriter)
+		#TODO: encoding sometimes leads to warnings when actually opening the file in spss
 		pseudoid = re.search(r'\d+',record[indexid].decode('utf-8')).group()
+		# check if the pseudoid is in the list of original identifiers
 		if pseudoid in pairKey.keys():
-			# replace the id record if a match is found and encode it
+			# replace the old pseudoid with the new one if a match is found and encode it
 			record[indexid] = pairKey[pseudoid].encode() 
-		else:
-			unmatchedWarningFlag = True
-			record[indexid] = "".encode()
+		# if the original pseudoid is not found, it will be registered in an array with unmatched pseudoid's (for future deletion)
+		elif pseudoid not in unmatchedPseudoid:
+			unmatchedPseudoid.append(pseudoid)
+		
+	# only keep the pseudoid's that are matched
+	#TODO: does this improve performance over f.e. rewriting an unmatched pseudoid to a blank string ("")	
+	savFileData = [record for record in savFileData if re.search(r'\d+',record[indexid].decode('utf-8')).group() not in unmatchedPseudoid]
 	
+	# log if pseudoid's have been unmatched and have been removed
 	if(unmatchedWarningFlag):
 		logger("Warning: one or several pseudoid's could not be matched in the following file: %s" % (savFileName))
 
