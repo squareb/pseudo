@@ -72,8 +72,6 @@ with open(pseudoNewFile) as csvfile:
 		pseudoNewCount += 1
 csvfile.close()
 
-#TODO: based on the pairing file remove participants that are not paired(?) to increase performance
-
 # log the total number of identifiers between the files and a possible warning if these are not equal
 logger("File containing original pseudoidentifiers: %s counting %s records" % (pseudoOriginalFile, pseudoOriginalCount))
 logger("File containing new pseudoidentifiers: %s counting %s records" % (pseudoNewFile, pseudoNewCount))
@@ -120,9 +118,13 @@ for file in spssFiles:
 
 	# get the index location of index variable based on the header (variable name)
 	indexid = savFileHeader.index(spssFilesIdVariable)
-	# variables for keeping track of unmatched pseudoid's
-	unmatchedPseudoid = []
-	unmatchedWarningFlag = False
+
+	# before iterating over the entire dataset, only keep the records that will be able to be paired
+	originalRecordAmount = len(savFileData)
+	savFileData = [record for record in savFileData if re.search(r'\d+',record[indexid].decode('utf-8')).group() in pairKey.keys()]
+	if originalRecordAmount != len(savFileData):
+		logger("Warning: a total number of %s pseudoid's are not paired and are removed from the new file: %s" % (originalRecordAmount - len(savFileData), savFileName))
+
 	# for each record from the spss file
 	for record in savFileData:
 		# strip the pseudoid so that we only have an integer (also decode it; this is a feature of savReaderWriter)
@@ -132,18 +134,7 @@ for file in spssFiles:
 		if pseudoid in pairKey.keys():
 			# replace the old pseudoid with the new one if a match is found and encode it
 			record[indexid] = pairKey[pseudoid].encode() 
-		# if the original pseudoid is not found, it will be registered in an array with unmatched pseudoid's (for future deletion)
-		elif pseudoid not in unmatchedPseudoid:
-			unmatchedPseudoid.append(pseudoid)
 		
-	# only keep the pseudoid's that are matched
-	#TODO: does this improve performance over f.e. rewriting an unmatched pseudoid to a blank string ("") 	
-	savFileData = [record for record in savFileData if re.search(r'\d+',record[indexid].decode('utf-8')).group() not in unmatchedPseudoid]
-	
-	# log if pseudoid's have been unmatched and have been removed
-	if(unmatchedWarningFlag):
-		logger("Warning: one or several pseudoid's could not be matched in the following file: %s" % (savFileName))
-
 	# store the results in a new spss file
 	#TODO: check refSavFileName parameter for copying metadata
 	savFileNameNew = "%s%s%s" % (spssFilesPath, '/generated/', os.path.basename(savFileName))
