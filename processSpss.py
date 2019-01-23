@@ -72,6 +72,8 @@ with open(pseudoNewFile) as csvfile:
 		pseudoNewCount += 1
 csvfile.close()
 
+#TODO: based on the pairing file remove participants that are not paired(?) to increase performance
+
 # log the total number of identifiers between the files and a possible warning if these are not equal
 logger("File containing original pseudoidentifiers: %s counting %s records" % (pseudoOriginalFile, pseudoOriginalCount))
 logger("File containing new pseudoidentifiers: %s counting %s records" % (pseudoNewFile, pseudoNewCount))
@@ -135,7 +137,7 @@ for file in spssFiles:
 			unmatchedPseudoid.append(pseudoid)
 		
 	# only keep the pseudoid's that are matched
-	#TODO: does this improve performance over f.e. rewriting an unmatched pseudoid to a blank string ("")	
+	#TODO: does this improve performance over f.e. rewriting an unmatched pseudoid to a blank string ("") 	
 	savFileData = [record for record in savFileData if re.search(r'\d+',record[indexid].decode('utf-8')).group() not in unmatchedPseudoid]
 	
 	# log if pseudoid's have been unmatched and have been removed
@@ -154,3 +156,4 @@ for file in spssFiles:
 	# update the progress bar
 	progress += 1
 	update_progress("Processing spss files", progress/(len(spssFiles) + 1))
+logger("Stopped execution @ %s" % (datetime.datetime.now()))
