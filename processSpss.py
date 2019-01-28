@@ -16,16 +16,21 @@ method to do various input sanitizations on user input.
 def sanitizeInput(string):
 	# remove additional quotes
 	string = string.replace("\"", "")
+	# trim whitespaces around string
+	string = string.strip()
 	return string
 
 """
 simple logger to write messages to a .txt file for later reference (i.e. warnings, errors and timestamps)
 """
-def logger(string):
+def logger(string, console=False):
 	log = open("logfile_processSpss.txt", "a+")
 	log.write(string)
 	log.write("\n")
 	log.close()
+
+	if console:
+		print(string)
 
 logger("\nRunning execution @ %s" % (datetime.datetime.now()))
 
@@ -79,7 +84,7 @@ if pseudoOriginalCount != pseudoNewCount:
 	logger("Warning: depseudonimize files do not contain an equal amount of identifiers!")
 
 # for validation purposes, return the first key/value pair of the dictionary (note: dictionaries do not guarantee order)
-print("Pairing file ready; peek: " + list(pairKey.keys())[0] + " <-> " + pairKey[list(pairKey.keys())[0]])
+logger("Pairing file ready; peek: " + list(pairKey.keys())[0] + " <-> " + pairKey[list(pairKey.keys())[0]], console=True)
 
 """ 
 process spss files
@@ -118,31 +123,30 @@ for file in spssFiles:
 
 	# get the index location of index variable based on the header (variable name)
 	indexid = savFileHeader.index(spssFilesIdVariable)
-
-	# before iterating over the entire dataset, only keep the records that will be able to be paired
-	originalRecordAmount = len(savFileData)
-	savFileData = [record for record in savFileData if re.search(r'\d+',record[indexid].decode('utf-8')).group() in pairKey.keys()]
-	if originalRecordAmount != len(savFileData):
-		logger("Warning: a total number of %s pseudoid's are not paired and are removed from the new file: %s" % (originalRecordAmount - len(savFileData), savFileName))
-
 	# for each record from the spss file
+	savFileDataNew = []
 	for record in savFileData:
-		# strip the pseudoid so that we only have an integer (also decode it; this is a feature of savReaderWriter)
-		#TODO: encoding sometimes leads to warnings when actually opening the file in spss
-		pseudoid = re.search(r'\d+',record[indexid].decode('utf-8')).group()
-		# check if the pseudoid is in the list of original identifiers
-		if pseudoid in pairKey.keys():
-			# replace the old pseudoid with the new one if a match is found and encode it
-			record[indexid] = pairKey[pseudoid].encode() 
+		try:
+			# strip the pseudoid so that we only have an integer (also decode it; this is a feature of savReaderWriter)
+			pseudoid = re.search(r'\d+',record[indexid].decode('utf-8')).group()
+		except AttributeError:
+			continue
+		if pseudoid in pairKey.keys():		
+			# replace the old pseudoid with the new one and encode it
+			record[indexid] = pairKey[pseudoid].encode()
+			savFileDataNew.append(record)
 		
+	originalRecordAmount = len(savFileData)
+	if originalRecordAmount != len(savFileDataNew):
+		logger("Warning: a total number of %s records are not paired and are removed from the new file: %s" % (originalRecordAmount - len(savFileDataNew), savFileName))
+
 	# store the results in a new spss file
-	#TODO: check refSavFileName parameter for copying metadata
 	savFileNameNew = "%s%s%s" % (spssFilesPath, '/generated/', os.path.basename(savFileName))
 	with savReaderWriter.SavWriter(savFileNameNew, savFileHeader, savVarTypes, 
 		valueLabels=metadata['valueLabels'], varLabels=metadata['varLabels'], 
 		formats=metadata['formats'], measureLevels=metadata['measureLevels'], 
 		columnWidths=metadata['columnWidths'], alignments=metadata['alignments']) as writer:
-		writer.writerows(savFileData)
+		writer.writerows(savFileDataNew)
 
 	# update the progress bar
 	progress += 1
