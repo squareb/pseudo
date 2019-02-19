@@ -72,15 +72,14 @@ for file in spssFiles:
 	with savReaderWriter.SavHeaderReader(savFileName) as header:
 		metadata = header.dataDictionary()
 
-	print(metadata)
-
 	savMetaFileNameNew = "%s%s%s" % (spssFilesPath, '/generated/', os.path.basename(savFileName + ".txt"))
 	metadataFile = open(savMetaFileNameNew, "w+")
 	for item in metadata:
-		metadataFile.write(item)
-		metadataFile.write("\n")
-		metadataFile.write(str(metadata[item]))
-		metadataFile.write("\n\n")
+		if item in ["varLabels", "valueLabels", "varNames"]:
+			metadataFile.write(item)
+			metadataFile.write("\n")
+			metadataFile.write(str(metadata[item]).replace('b\'', '\''))
+			metadataFile.write("\n\n")
 	metadataFile.close()
 
 	# update the progress bar

@@ -83,7 +83,7 @@ logger("File containing new pseudoidentifiers: %s counting %s records" % (pseudo
 if pseudoOriginalCount != pseudoNewCount:
 	logger("Warning: depseudonimize files do not contain an equal amount of identifiers!")
 	logger("Error: Family relations script can not continue")
-	break
+	exit
 
 # for validation purposes, return the first key/value pair of the dictionary (note: dictionaries do not guarantee order)
 logger("Pairing file ready; peek: " + list(pairKey.keys())[0] + " <-> " + pairKey[list(pairKey.keys())[0]], console=True)
