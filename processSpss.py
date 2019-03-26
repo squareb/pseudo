@@ -129,7 +129,8 @@ for file in spssFiles:
 		try:
 			# strip the pseudoid so that we only have an integer (also decode it; this is a feature of savReaderWriter)
 			pseudoid = re.search(r'\d+',record[indexid].decode('utf-8')).group()
-		except AttributeError:
+		# AttributeError occurs when record[index] is an empty string (can't do .group() on an empty string)
+		except (AttributeError) as err:
 			continue
 		if pseudoid in pairKey.keys():		
 			# replace the old pseudoid with the new one and encode it
@@ -142,11 +143,18 @@ for file in spssFiles:
 
 	# store the results in a new spss file
 	savFileNameNew = "%s%s%s" % (spssFilesPath, '/generated/', os.path.basename(savFileName))
-	with savReaderWriter.SavWriter(savFileNameNew, savFileHeader, savVarTypes, 
-		valueLabels=metadata['valueLabels'], varLabels=metadata['varLabels'], 
-		formats=metadata['formats'], measureLevels=metadata['measureLevels'], 
-		columnWidths=metadata['columnWidths'], alignments=metadata['alignments']) as writer:
-		writer.writerows(savFileDataNew)
+	try:
+		with savReaderWriter.SavWriter(savFileNameNew, savFileHeader, savVarTypes, 
+			valueLabels=metadata['valueLabels'], varLabels=metadata['varLabels'], 
+			formats=metadata['formats'], measureLevels=metadata['measureLevels'], 
+			columnWidths=metadata['columnWidths'], alignments=metadata['alignments']) as writer:
+			writer.writerows(savFileDataNew)
+	except (ValueError, MemoryError) as err:
+		logger("Error: " + str(err), console=True)
+		if(type(err) is ValueError):
+			logger("A ValueError has occured, please check if the (spss) files contain only the pseudoidentifiers from the depseudonimization files", console=True)
+		if(type(err) is MemoryError):
+			logger("A MemoryError has occured, the file you are trying to process is too big and there is not enough internal memory available. Please decrease the file size and try again", console=True)
 
 	# update the progress bar
 	progress += 1
