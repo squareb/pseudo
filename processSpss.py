@@ -84,18 +84,26 @@ if pseudoOriginalCount != pseudoNewCount:
 	logger("Warning: depseudonimize files do not contain an equal amount of identifiers!")
 
 # for validation purposes, return the first key/value pair of the dictionary (note: dictionaries do not guarantee order)
-logger("Pairing file ready; peek: " + list(pairKey.keys())[0] + " <-> " + pairKey[list(pairKey.keys())[0]], console=True)
+logger("Pairing file ready; peek: %s <-> %s" % (list(pairKey.keys())[0], pairKey[list(pairKey.keys())[0]]), console=True)
 
 """ 
 process spss files
 """
 # determine spss files
 spssFilesPath = sanitizeInput(input("Please provide the location of the spss files: "))
-spssFilesPath = "./spss" if spssFilesPath == "" else spssFilesPath
 spssFiles = glob.glob(spssFilesPath + '/*.sav')
+savRestrictionFile = sanitizeInput(input("Please provide the spss file used for restriction (leave this empty if you do not want to restrict): "))
 
 # determine the id-variable from the spss file for pseudonimization
 spssFilesIdVariable = b"PSEUDOIDEXT"
+
+# read the spss file for restriction and restrict the dictionary
+if savRestrictionFile:
+	with savReaderWriter.SavReader(savRestrictionFile, selectVars=[spssFilesIdVariable]) as reader:
+		savRestrictionFileData = reader.all()
+	# if the id identified from the file is in the dictionary, remove it via pop()
+	for pseudoid in savRestrictionFileData:
+		pairKey.pop(pseudoid[0], None)
 
 # create a folder to store the new files
 dirName = "/generated"
@@ -150,7 +158,7 @@ for file in spssFiles:
 			columnWidths=metadata['columnWidths'], alignments=metadata['alignments']) as writer:
 			writer.writerows(savFileDataNew)
 	except (ValueError, MemoryError) as err:
-		logger("Error: " + str(err), console=True)
+		logger("Error: %s" % (str(err)), console=True)
 		if(type(err) is ValueError):
 			logger("A ValueError has occured, please check if the (spss) files contain only the pseudoidentifiers from the depseudonimization files", console=True)
 		if(type(err) is MemoryError):
@@ -159,4 +167,6 @@ for file in spssFiles:
 	# update the progress bar
 	progress += 1
 	update_progress("Processing spss files", progress/(len(spssFiles) + 1))
+
+logger("For warnings, please check the log in: %s" % (os.getcwd()), console=True)
 logger("Stopped execution @ %s" % (datetime.datetime.now()))
