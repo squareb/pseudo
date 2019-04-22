@@ -98,12 +98,15 @@ savRestrictionFile = sanitizeInput(input("Please provide the spss file used for 
 spssFilesIdVariable = b"PSEUDOIDEXT"
 
 # read the spss file for restriction and restrict the dictionary
+pairKeySubstitute = {}
 if savRestrictionFile:
 	with savReaderWriter.SavReader(savRestrictionFile, selectVars=[spssFilesIdVariable]) as reader:
 		savRestrictionFileData = reader.all()
 	# if the id identified from the file is in the dictionary, remove it via pop()
 	for pseudoid in savRestrictionFileData:
-		pairKey.pop(pseudoid[0], None)
+		newkey = list(pairKey.keys())[list(pairKey.values()).index(pseudoid[0].decode('utf-8'))]
+		pairKeySubstitute[newkey] = pairKey.pop(list(pairKey.keys())[list(pairKey.values()).index(pseudoid[0].decode('utf-8'))], None)
+	pairKey = pairKeySubstitute
 
 # create a folder to store the new files
 dirName = "/generated"
