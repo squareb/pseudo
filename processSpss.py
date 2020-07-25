@@ -158,7 +158,7 @@ for file in spssFiles:
 		with savReaderWriter.SavWriter(savFileNameNew, savFileHeader, savVarTypes, 
 			valueLabels=metadata['valueLabels'], varLabels=metadata['varLabels'], 
 			formats=metadata['formats'], measureLevels=metadata['measureLevels'], 
-			columnWidths=metadata['columnWidths'], alignments=metadata['alignments']) as writer:
+			columnWidths=metadata['columnWidths'], alignments=metadata['alignments'], ioUtf8=True) as writer:
 			writer.writerows(savFileDataNew)
 	except (ValueError, MemoryError) as err:
 		logger("Error: %s" % (str(err)), console=True)
